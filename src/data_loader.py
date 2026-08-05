@@ -201,6 +201,33 @@ def _download_dfp_ano(ano: int) -> dict[str, pd.DataFrame]:
     return dados
  
  
+def get_composicao_capital(ticker: str, ano: int) -> pd.DataFrame:
+    """
+    Composição do capital social (quantidade de ações) de uma empresa, do
+    arquivo dfp_cia_aberta_composicao_capital_{ano}.csv da CVM.
+
+    Esse arquivo não tem coluna CD_CVM (diferente de BPP/DRE/etc.) — a
+    empresa é identificada por CNPJ_CIA, então o filtro usa o CNPJ já
+    resolvido/cacheado por _get_cvm_code (zfill(14) porque o cache, ao
+    passar por CSV, perde zeros à esquerda de CNPJ que começa com 0).
+    """
+    _get_cvm_code(ticker)  # garante que TICKER_CVM_CACHE_PATH já tem o cnpj do ticker
+    cache = pd.read_csv(TICKER_CVM_CACHE_PATH)
+    cnpj = str(cache.loc[cache["ticker"] == ticker, "cnpj"].iloc[0]).zfill(14)
+
+    arquivos = _download_dfp_ano(ano)
+    chave = f"dfp_cia_aberta_composicao_capital_{ano}.csv"
+    if chave not in arquivos:
+        raise ValueError(f"Arquivo '{chave}' não encontrado.")
+
+    df = arquivos[chave].copy()
+    df["_cnpj_limpo"] = df["CNPJ_CIA"].apply(_limpar_cnpj)
+    resultado = df[df["_cnpj_limpo"] == cnpj].drop(columns="_cnpj_limpo")
+    if resultado.empty:
+        raise ValueError(f"CNPJ '{cnpj}' ({ticker}) não encontrado em {chave}.")
+    return resultado
+
+
 def get_dfp(ticker: str, ano: int, demonstrativo: str = "DRE", tipo: str = "con") -> pd.DataFrame:
     """
     Retorna um demonstrativo financeiro (DFP anual) de uma empresa.
