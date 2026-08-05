@@ -74,7 +74,7 @@ def calcular_beta(ticker: str, start: str, end: str) -> dict:
 
     # Alinha as duas séries por data antes de regredir — evita comparar
     # retornos de dias diferentes caso os índices não batam 100%.
-    df_alinhado = pd.concat([ret_ativo.rename("ativo"), ret_ibov.rename("ibov")], axis=1).dropna()
+    df_alinhado = pd.concat([ret_ativo.rename("ativo"), ret_ibov.rename("ibov")], axis=1, sort=False).dropna()
 
     resultado = stats.linregress(df_alinhado["ibov"], df_alinhado["ativo"])
     return {
