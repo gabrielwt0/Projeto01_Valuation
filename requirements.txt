@@ -5,3 +5,4 @@ yfinance
 python-bcb
 matplotlib
 pytest
+python-dotenv

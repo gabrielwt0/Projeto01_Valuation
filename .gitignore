@@ -9,6 +9,10 @@ venv/
 # Dados brutos (baixados via API, não versionados)
 data/raw/*
 !data/raw/.gitkeep
+# Exceção: mapeamento ticker -> CD_CVM já resolvido, para não depender
+# de BRAPI_TOKEN em clonagens novas do repositório (veja scripts/warm_ticker_cache.py)
+!data/raw/ticker_cvm_map.csv
+!data/raw/ticker_cvm_falhas.csv
 data/processed/*
 !data/processed/.gitkeep
 
