@@ -20,6 +20,10 @@ data/processed/*
 reports/*.pdf
 reports/*.html
 
+# Dado bruto não deveria morar em notebooks/ (deve ir em data/raw/)
+notebooks/*.csv
+notebooks/*.zip
+
 # Ambiente / editor
 .env
 .vscode/
