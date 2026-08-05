@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Dados brutos (baixados via API, não versionados)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Relatórios gerados
+reports/*.pdf
+reports/*.html
+
+# Ambiente / editor
+.env
+.vscode/
+.DS_Store
