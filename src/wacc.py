@@ -229,7 +229,11 @@ if __name__ == "__main__":
     print("valor de mercado do equity:", valor_equity)
 
     bpp = get_dfp(ticker, ano, "BPP", "con")
-    divida_contabil = bpp[
+    # VL_CONTA do DFP vem em R$ mil (ESCALA_MOEDA == 'MIL'), mas valor_equity
+    # (preço x nº de ações) já está em R$ cheio — sem o *1000 aqui, o peso
+    # da dívida no WACC fica ~1000x subestimado (E/(E+D) artificialmente
+    # perto de 100%).
+    divida_contabil = 1000 * bpp[
         bpp.CD_CONTA.isin([CD_CONTA_DIVIDA_CP, CD_CONTA_DIVIDA_LP])
         & (bpp.ORDEM_EXERC == "ÚLTIMO")
     ]["VL_CONTA"].sum()
