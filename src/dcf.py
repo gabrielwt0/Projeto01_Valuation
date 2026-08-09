@@ -129,6 +129,18 @@ def calcular_fcff(ticker: str, ano: int, aliquota_ir: float = ALIQUOTA_IR_PADRAO
     FCFF (unlevered) porque parte do EBIT, antes do resultado financeiro —
     é o fluxo disponível para todos os provedores de capital (equity +
     dívida), consistente com descontar pelo WACC (não pelo Ke) no DCF.
+
+    LIMITAÇÃO CONHECIDA (documentada na Fase 5, ao plotar o histórico de
+    FCFF de JHSF3): o FCFF de um único ano pode ser dominado pelo ΔNWC,
+    que é lumpy em incorporadoras (ciclo de banco de terrenos/lançamento).
+    JHSF3 teve FCFF NEGATIVO em 2021 e 2022, virando positivo só em 2023
+    — e é esse único ano (2023) que calcular_enterprise_value usa como
+    base para toda a projeção explícita. Um ano-base anômalo contamina o
+    DCF inteiro (efeito parecido com o de calcular_cagr_receita, mas na
+    base em vez de no crescimento). Não corrigido de propósito — considerar
+    no relatório final (Fase 7) usar uma média de FCFF de 2-3 anos como
+    base em vez do valor de um único ano, se a lumpiness for material para
+    o ticker analisado.
     """
     ebit = calcular_ebit(ticker, ano)
     da = calcular_depreciacao_amortizacao(ticker, ano)
