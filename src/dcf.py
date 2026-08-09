@@ -162,20 +162,20 @@ def calcular_cagr_receita(ticker: str, ano_final: int, n_anos: int = JANELA_CAGR
     return (receita_final / receita_inicial) ** (1 / n_anos) - 1
 
 
-def anualizar_taxa_mensal(taxa_mensal_pct: float) -> float:
-    """
-    Converte uma taxa mensal (em %) para taxa anual efetiva (em %), via
-    juros compostos com 12 meses — mesmo raciocínio de
-    wacc.anualizar_taxa_diaria, mas para séries mensais (IPCA via SGS).
-    """
-    taxa_anual_pct = (1 + taxa_mensal_pct / 100) ** 12 - 1
-    return taxa_anual_pct * 100
-
-
 def calcular_ipca_medio_anual(start: str, end: str) -> float:
     """
-    IPCA médio anualizado no período [start, end]: média aritmética das
-    variações mensais, depois anualizada via juros compostos (12 meses).
+    IPCA médio anualizado no período [start, end]: composição geométrica
+    real das variações mensais (produto dos fatores mensais), anualizada
+    pela raiz N-ésima (N = nº de meses na janela).
+
+        ipca_anual = (prod(1 + ipca_mensal_i / 100)) ** (12 / N) - 1
+
+    Faz a composição direta em vez de tirar a média ARITMÉTICA das taxas
+    mensais e só então compor por 12 — essa segunda abordagem embute o
+    viés de Jensen (média aritmética >= média geométrica) e superestima
+    levemente a inflação anualizada. A diferença é pequena com IPCA
+    típico (~0.01 p.p. testado numa janela de 5 anos), mas a composição
+    direta é a formulação correta, não uma aproximação.
 
     Usado como base do g_perpetuidade — premissa de que, na perpetuidade,
     o FCFF cresce só pela inflação (crescimento real zero na perpetuidade),
@@ -183,8 +183,9 @@ def calcular_ipca_medio_anual(start: str, end: str) -> float:
     o valor terminal, que já domina o EV em DCFs de empresa madura).
     """
     ipca_mensal = get_ipca(start, end)
-    media_mensal_pct = ipca_mensal.mean()
-    return anualizar_taxa_mensal(media_mensal_pct) / 100
+    n_meses = len(ipca_mensal)
+    fator_acumulado = (1 + ipca_mensal / 100).prod()
+    return fator_acumulado ** (12 / n_meses) - 1
 
 
 def projetar_fcff(fcff_base: float, taxa_crescimento: float, n_anos: int = N_ANOS_EXPLICITO_PADRAO) -> list[float]:

@@ -44,12 +44,20 @@ TICKER_CVM_CACHE_PATH = DATA_DIR / "ticker_cvm_map.csv"
 # ---------------------------------------------------------------------------
  
 def get_selic(start: str, end: str) -> pd.Series:
-    """Selic diária (% a.a.), código SGS 11."""
+    """
+    Selic, código SGS 11 — apesar do nome oficial do BCB ("Selic
+    anualizada"), o valor retornado é a taxa DIÁRIA efetiva (ex.: 0.0437
+    para 2024-01-02, não ~11.75). Precisa de wacc.anualizar_taxa_diaria()
+    para virar taxa anual — confirmado empiricamente (ver src/wacc.py).
+    """
     return sgs.get({"selic": 11}, start=start, end=end)["selic"]
- 
- 
+
+
 def get_cdi(start: str, end: str) -> pd.Series:
-    """CDI diária (% a.a.), código SGS 12."""
+    """
+    CDI, código SGS 12 — mesma ressalva de get_selic: valor DIÁRIO efetivo,
+    não já anualizado. Precisa de wacc.anualizar_taxa_diaria().
+    """
     return sgs.get({"cdi": 12}, start=start, end=end)["cdi"]
  
  
