@@ -11,14 +11,26 @@ src/wacc.py (alíquota de IR, contas de dívida onerosa) em vez de duplicar.
 
 import pandas as pd
 
-from src.data_loader import get_composicao_capital, get_dfp, get_precos
+from src.data_loader import get_composicao_capital, get_dfp, get_ipca, get_precos
 from src.wacc import (
     ALIQUOTA_IR_PADRAO,
     CD_CONTA_DIVIDA_CP,
     CD_CONTA_DIVIDA_LP,
 )
 
-N_ANOS_EXPLICITO_PADRAO = 5  # decisão de projeto: documentar no relatório final (Fase 7)
+N_ANOS_EXPLICITO_PADRAO = 5   # decisão de projeto: documentar no relatório final (Fase 7)
+JANELA_CAGR_RECEITA_ANOS = 3  # decisão de projeto, documentar no relatório final (Fase 7):
+                               # testado com JHSF3 — janela de 5a (2018->2023) dá CAGR de
+                               # 26.8%/ano porque 2018 é base deprimida pós-crise e 2021 é
+                               # pico de recuperação pós-pandemia; janela de 2a (2021->2023)
+                               # dá -10.9% por comparar só contra o próprio pico. 3a (2020->2023)
+                               # é o meio-termo mais defensável: +10.8%, ainda positivo mas sem
+                               # herdar o boom completo nem depender de um único ano de pico.
+JANELA_IPCA_ANOS = 5          # janela mais curta que JANELA_HISTORICA_ANOS (wacc.py) de
+                               # propósito: IPCA de 10a atrás inclui o pico de 2015/2016,
+                               # não representativo do regime de meta atual do Bacen.
+
+CD_CONTA_RECEITA_LIQUIDA = "3.01"  # DRE: "Receita de Venda de Bens e/ou Serviços"
 
 # Códigos de conta do DFP (taxonomia CVM), confirmados manualmente em
 # JHSF3/2023, igual à ressalva já feita em wacc.py — confira se se mantêm
@@ -124,6 +136,55 @@ def calcular_fcff(ticker: str, ano: int, aliquota_ir: float = ALIQUOTA_IR_PADRAO
     delta_nwc = calcular_variacao_nwc(ticker, ano)
 
     return ebit * (1 - aliquota_ir) + da - capex - delta_nwc
+
+
+def calcular_receita(ticker: str, ano: int) -> float:
+    """Receita líquida do ano = CD_CONTA 3.01 do DRE (ÚLTIMO exercício)."""
+    dre = get_dfp(ticker, ano, "DRE", "con")
+    linha = dre[(dre.CD_CONTA == CD_CONTA_RECEITA_LIQUIDA) & (dre.ORDEM_EXERC == "ÚLTIMO")]
+    return linha["VL_CONTA"].iloc[0]
+
+
+def calcular_cagr_receita(ticker: str, ano_final: int, n_anos: int = JANELA_CAGR_RECEITA_ANOS) -> float:
+    """
+    CAGR de receita entre (ano_final - n_anos) e ano_final:
+        CAGR = (receita_final / receita_inicial)^(1/n_anos) - 1
+
+    Usado como g_explicito (crescimento do período explícito do DCF) —
+    assume que a empresa mantém o ritmo histórico recente de crescimento
+    de receita. Premissa simplificadora a validar manualmente por setor/
+    ciclo no relatório final (Fase 7), não uma verdade absoluta — uma
+    empresa cíclica pode ter CAGR distorcido por onde a janela começa/termina.
+    """
+    receita_final = calcular_receita(ticker, ano_final)
+    receita_inicial = calcular_receita(ticker, ano_final - n_anos)
+    assert receita_inicial > 0, f"receita_inicial não positiva ({receita_inicial}) — CAGR indefinido."
+    return (receita_final / receita_inicial) ** (1 / n_anos) - 1
+
+
+def anualizar_taxa_mensal(taxa_mensal_pct: float) -> float:
+    """
+    Converte uma taxa mensal (em %) para taxa anual efetiva (em %), via
+    juros compostos com 12 meses — mesmo raciocínio de
+    wacc.anualizar_taxa_diaria, mas para séries mensais (IPCA via SGS).
+    """
+    taxa_anual_pct = (1 + taxa_mensal_pct / 100) ** 12 - 1
+    return taxa_anual_pct * 100
+
+
+def calcular_ipca_medio_anual(start: str, end: str) -> float:
+    """
+    IPCA médio anualizado no período [start, end]: média aritmética das
+    variações mensais, depois anualizada via juros compostos (12 meses).
+
+    Usado como base do g_perpetuidade — premissa de que, na perpetuidade,
+    o FCFF cresce só pela inflação (crescimento real zero na perpetuidade),
+    a mais conservadora possível para o valor terminal (evita superestimar
+    o valor terminal, que já domina o EV em DCFs de empresa madura).
+    """
+    ipca_mensal = get_ipca(start, end)
+    media_mensal_pct = ipca_mensal.mean()
+    return anualizar_taxa_mensal(media_mensal_pct) / 100
 
 
 def projetar_fcff(fcff_base: float, taxa_crescimento: float, n_anos: int = N_ANOS_EXPLICITO_PADRAO) -> list[float]:
@@ -278,8 +339,12 @@ if __name__ == "__main__":
     fcff_base = calcular_fcff(ticker, ano)
     print("FCFF base (ano):", fcff_base)
 
-    g_explicito = 0.05       # crescimento no período explícito — TODO: embasar (CAGR histórico?)
-    g_perpetuidade = 0.03    # crescimento na perpetuidade — TODO: embasar (ex.: IPCA + crescimento real)
+    g_explicito = calcular_cagr_receita(ticker, ano)
+    print(f"g_explicito (CAGR receita, {JANELA_CAGR_RECEITA_ANOS}a):", g_explicito)
+
+    inicio_ipca = (hoje - pd.DateOffset(years=JANELA_IPCA_ANOS)).strftime("%Y-%m-%d")
+    g_perpetuidade = calcular_ipca_medio_anual(inicio_ipca, fim)
+    print(f"g_perpetuidade (IPCA médio anualizado, {JANELA_IPCA_ANOS}a):", g_perpetuidade)
 
     dcf = calcular_enterprise_value(fcff_base, wacc, g_explicito, g_perpetuidade)
     print("Enterprise Value:", dcf["enterprise_value"])
