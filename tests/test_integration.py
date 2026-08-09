@@ -9,9 +9,10 @@ não contra `hoje` mudar (preço de mercado, WACC "ao vivo" etc. não têm
 valor fixo esperado, só são checados por sanidade/tipo/sinal).
 """
 
+import pandas as pd
 import pytest
 
-from src.data_loader import get_dfp, get_ipca, get_selic
+from src.data_loader import get_carteira_precos, get_composicao_capital, get_dfp, get_ibovespa, get_ipca, get_precos, get_selic
 from src.dcf import (
     calcular_cagr_receita,
     calcular_capex,
@@ -22,7 +23,9 @@ from src.dcf import (
     calcular_receita,
     calcular_variacao_nwc,
 )
-from src.wacc import custo_divida
+from src.wacc import JANELA_HISTORICA_ANOS, calcular_beta, custo_divida, premio_de_risco, valor_mercado_equity
+
+pytestmark = pytest.mark.integration
 
 TICKER = "JHSF3"
 ANO = 2023
@@ -106,3 +109,95 @@ class TestDividaECustoDeDivida:
     def test_divida_liquida(self):
         # divida_bruta (CP+LP) = 3264668; caixa+aplicações = 318126+326173 = 644299
         assert calcular_divida_liquida(TICKER, ANO) == pytest.approx(2620369.0)
+
+
+class TestBetaEPremioDeRisco:
+    """
+    calcular_beta/premio_de_risco/valor_mercado_equity dependem do preço
+    de mercado "de hoje" — não têm valor fixo esperado. Testados por
+    sanidade de tipo/faixa/sinal, não por igualdade a um número travado
+    (ao contrário de TestFcffJhsf32023, que só usa dado histórico fechado).
+    """
+
+    @pytest.fixture
+    def janela(self):
+        # só monta duas strings de data (sem rede) — não precisa de scope="class"
+        hoje = pd.Timestamp.today().normalize()
+        inicio = (hoje - pd.DateOffset(years=JANELA_HISTORICA_ANOS)).strftime("%Y-%m-%d")
+        return inicio, hoje.strftime("%Y-%m-%d")
+
+    def test_beta_tem_as_chaves_esperadas_e_r2_em_faixa_valida(self, janela):
+        inicio, fim = janela
+        resultado = calcular_beta(TICKER, inicio, fim)
+        assert set(resultado) == {"beta", "r_quadrado", "stderr"}
+        assert 0 <= resultado["r_quadrado"] <= 1
+        assert -5 < resultado["beta"] < 5  # faixa plausível p/ uma ação individual
+
+    def test_premio_de_risco_e_float_em_faixa_plausivel(self, janela):
+        inicio, fim = janela
+        premio = premio_de_risco(inicio, fim)
+        assert isinstance(premio, float)
+        assert -0.5 < premio < 0.5
+
+    def test_valor_mercado_equity_e_positivo(self):
+        assert valor_mercado_equity(TICKER, ANO) > 0
+
+
+class TestPrecosECarteira:
+    @pytest.fixture
+    def janela_curta(self):
+        hoje = pd.Timestamp.today().normalize()
+        inicio = (hoje - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
+        return inicio, hoje.strftime("%Y-%m-%d")
+
+    def test_get_precos_traz_coluna_do_ticker(self, janela_curta):
+        inicio, fim = janela_curta
+        precos = get_precos(TICKER, inicio, fim)
+        assert TICKER in precos.columns
+        assert (precos[TICKER] > 0).all()
+
+    def test_get_ibovespa_traz_serie_positiva(self, janela_curta):
+        inicio, fim = janela_curta
+        ibov = get_ibovespa(inicio, fim)
+        assert ibov.name == "IBOV"
+        assert (ibov > 0).all()
+
+    def test_get_carteira_precos_alinha_ativos_por_data(self, janela_curta):
+        inicio, fim = janela_curta
+        carteira = get_carteira_precos([TICKER, "EZTC3"], inicio, fim)
+        assert list(carteira.columns) == [TICKER, "EZTC3"]
+        assert not carteira.isna().any().any()  # dropna já deveria ter alinhado tudo
+
+    def test_get_composicao_capital_traz_acoes_positivas(self):
+        composicao = get_composicao_capital(TICKER, ANO)
+        assert (composicao["QT_ACAO_TOTAL_CAP_INTEGR"] > 0).all()
+
+
+class TestGerarRelatorioEndToEnd:
+    """
+    Teste de fiação: o pipeline inteiro (scripts/gerar_relatorio.py) só
+    era exercitado manualmente até aqui — _montar_markdown é testado à
+    parte (tests/test_gerar_relatorio.py) com dicts sintéticos, mas nada
+    verificava que _gerar_wacc/_gerar_dcf/_gerar_var/_gerar_graficos
+    produzem dicts com as chaves que _montar_markdown/_gerar_graficos
+    esperam. reports_dir injetável (ver gerar_relatorio()) evita
+    sobrescrever reports/JHSF3.md, que já está commitado.
+    """
+
+    def test_pipeline_completo_gera_markdown_e_graficos(self, tmp_path):
+        from scripts.gerar_relatorio import gerar_relatorio
+
+        caminho = gerar_relatorio(TICKER, ANO, reports_dir=tmp_path)
+
+        assert caminho == tmp_path / f"{TICKER}.md"
+        assert caminho.exists()
+
+        conteudo = caminho.read_text(encoding="utf-8")
+        assert f"# Relatório de Valuation — {TICKER} ({ANO})" in conteudo
+        assert "**WACC:" in conteudo
+
+        pasta_graficos = tmp_path / TICKER
+        for nome in ["receita_historica.png", "projecao_fcff.png", "estrutura_capital.png",
+                     "sensibilidade_dcf.png", "var_distribuicao.png"]:
+            arquivo = pasta_graficos / nome
+            assert arquivo.exists() and arquivo.stat().st_size > 0

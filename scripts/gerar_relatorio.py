@@ -234,7 +234,13 @@ def _montar_markdown(ticker: str, ano: int, preco_atual: float, wacc_info: dict,
     return "\n".join(linhas)
 
 
-def gerar_relatorio(ticker: str, ano: int) -> Path:
+def gerar_relatorio(ticker: str, ano: int, reports_dir: Path | None = None) -> Path:
+    """
+    reports_dir é injetável (default: reports/ na raiz do projeto) para
+    permitir testar o pipeline inteiro contra um diretório temporário em
+    tests/test_integration.py, sem sobrescrever os relatórios já
+    commitados em reports/.
+    """
     hoje = pd.Timestamp.today().normalize()
     inicio_precos = (hoje - pd.DateOffset(years=JANELA_HISTORICA_ANOS)).strftime("%Y-%m-%d")
     fim = hoje.strftime("%Y-%m-%d")
@@ -249,7 +255,8 @@ def gerar_relatorio(ticker: str, ano: int) -> Path:
     inicio_var = (hoje - pd.DateOffset(years=2)).strftime("%Y-%m-%d")
     var_info = _gerar_var(ticker, inicio_var, fim)
 
-    reports_dir = Path(__file__).resolve().parent.parent / "reports"
+    if reports_dir is None:
+        reports_dir = Path(__file__).resolve().parent.parent / "reports"
     pasta_graficos = reports_dir / ticker
 
     print("Gerando gráficos...")
