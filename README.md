@@ -1,5 +1,7 @@
 # valuation-br
 
+> 🚧 **Em desenvolvimento** — funcional, mas em evolução ativa (ajustes na camada de dados, WACC e DCF ainda em andamento).
+
 Ferramenta de valuation (WACC + DCF) e análise de risco (VaR) para ações
 brasileiras, construída do zero sobre dados abertos: CVM (fundamentos),
 yfinance (preços) e python-bcb (Selic/CDI/IPCA via SGS do Bacen).
