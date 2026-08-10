@@ -7,3 +7,5 @@ matplotlib
 pytest
 pytest-cov
 python-dotenv
+pyarrow
+streamlit

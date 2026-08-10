@@ -1,10 +1,11 @@
 """
 Testes de scripts/gerar_relatorio.py — só a parte pura (_montar_markdown,
 que monta o texto a partir de dicts já calculados). O resto do módulo
-(gerar_relatorio, _gerar_wacc/_gerar_dcf/_gerar_var/_gerar_graficos) é
-puro encanamento de rede+cálculo já coberto por
-tests/test_integration.py e tests/test_visualizacao.py — testar de novo
-aqui seria só duplicar chamadas de rede caras sem cobrir lógica nova.
+(gerar_relatorio, gerar_wacc/gerar_dcf/gerar_var/gerar_graficos — sem
+underscore porque app.py/Streamlit também os importa) é puro encanamento
+de rede+cálculo já coberto por tests/test_integration.py e
+tests/test_visualizacao.py — testar de novo aqui seria só duplicar
+chamadas de rede caras sem cobrir lógica nova.
 """
 
 import pytest

@@ -178,8 +178,8 @@ class TestGerarRelatorioEndToEnd:
     Teste de fiação: o pipeline inteiro (scripts/gerar_relatorio.py) só
     era exercitado manualmente até aqui — _montar_markdown é testado à
     parte (tests/test_gerar_relatorio.py) com dicts sintéticos, mas nada
-    verificava que _gerar_wacc/_gerar_dcf/_gerar_var/_gerar_graficos
-    produzem dicts com as chaves que _montar_markdown/_gerar_graficos
+    verificava que gerar_wacc/gerar_dcf/gerar_var/gerar_graficos
+    produzem dicts com as chaves que _montar_markdown/gerar_graficos
     esperam. reports_dir injetável (ver gerar_relatorio()) evita
     sobrescrever reports/JHSF3.md, que já está commitado.
     """

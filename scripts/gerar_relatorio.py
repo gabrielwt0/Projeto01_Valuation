@@ -63,7 +63,7 @@ from src.wacc import (
 N_ANOS_HISTORICO_GRAFICO = 5  # quantos anos de receita/FCFF mostrar no gráfico histórico
 
 
-def _gerar_wacc(ticker: str, ano: int, inicio: str, fim: str) -> dict:
+def gerar_wacc(ticker: str, ano: int, inicio: str, fim: str) -> dict:
     beta_info = calcular_beta(ticker, inicio, fim)
     premio = premio_de_risco(inicio, fim)
     rf = anualizar_taxa_diaria(get_selic(inicio, fim).iloc[-1]) / 100
@@ -91,7 +91,7 @@ def _gerar_wacc(ticker: str, ano: int, inicio: str, fim: str) -> dict:
     }
 
 
-def _gerar_dcf(ticker: str, ano: int, wacc: float) -> dict:
+def gerar_dcf(ticker: str, ano: int, wacc: float) -> dict:
     fcff_base = calcular_fcff(ticker, ano)
     g_explicito = calcular_cagr_receita(ticker, ano)
 
@@ -115,7 +115,7 @@ def _gerar_dcf(ticker: str, ano: int, wacc: float) -> dict:
     }
 
 
-def _gerar_var(ticker: str, inicio: str, fim: str) -> dict:
+def gerar_var(ticker: str, inicio: str, fim: str) -> dict:
     precos = get_precos(ticker, inicio, fim)[ticker]
     retornos = calcular_retornos_simples(precos)
 
@@ -129,7 +129,7 @@ def _gerar_var(ticker: str, inicio: str, fim: str) -> dict:
     return resultado
 
 
-def _gerar_graficos(ticker: str, ano: int, pasta: Path, wacc_info: dict, dcf_info: dict, var_info: dict) -> None:
+def gerar_graficos(ticker: str, ano: int, pasta: Path, wacc_info: dict, dcf_info: dict, var_info: dict) -> None:
     pasta.mkdir(parents=True, exist_ok=True)
 
     anos_historico = list(range(ano - N_ANOS_HISTORICO_GRAFICO + 1, ano + 1))
@@ -246,21 +246,21 @@ def gerar_relatorio(ticker: str, ano: int, reports_dir: Path | None = None) -> P
     fim = hoje.strftime("%Y-%m-%d")
 
     print(f"Calculando WACC de {ticker}...")
-    wacc_info = _gerar_wacc(ticker, ano, inicio_precos, fim)
+    wacc_info = gerar_wacc(ticker, ano, inicio_precos, fim)
 
     print("Calculando DCF...")
-    dcf_info = _gerar_dcf(ticker, ano, wacc_info["wacc"])
+    dcf_info = gerar_dcf(ticker, ano, wacc_info["wacc"])
 
     print("Calculando VaR...")
     inicio_var = (hoje - pd.DateOffset(years=2)).strftime("%Y-%m-%d")
-    var_info = _gerar_var(ticker, inicio_var, fim)
+    var_info = gerar_var(ticker, inicio_var, fim)
 
     if reports_dir is None:
         reports_dir = Path(__file__).resolve().parent.parent / "reports"
     pasta_graficos = reports_dir / ticker
 
     print("Gerando gráficos...")
-    _gerar_graficos(ticker, ano, pasta_graficos, wacc_info, dcf_info, var_info)
+    gerar_graficos(ticker, ano, pasta_graficos, wacc_info, dcf_info, var_info)
 
     preco_atual = get_precos(ticker, (hoje - pd.Timedelta(days=10)).strftime("%Y-%m-%d"), fim)[ticker].iloc[-1]
     markdown = _montar_markdown(ticker, ano, preco_atual, wacc_info, dcf_info, var_info)

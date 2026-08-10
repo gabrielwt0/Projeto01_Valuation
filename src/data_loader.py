@@ -28,6 +28,11 @@ load_dotenv()
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 DATA_DIR.mkdir(exist_ok=True)
 
+# Cache dos CSVs já parseados do ZIP anual da CVM, em parquet (bem mais
+# rápido de reler que reparsear o CSV) — sobrevive entre execuções do
+# programa, ao contrário do _CACHE_DFP em memória (só dura o processo).
+DFP_PARSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed" / "dfp_parsed"
+
 CVM_BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS"
 CVM_CADASTRO_URL = (
     "https://dados.cvm.gov.br/dados/CIA_ABERTA/CAD/DADOS/cad_cia_aberta.csv"
@@ -186,18 +191,42 @@ def _get_cvm_code(ticker: str) -> str:
     return cd_cvm
  
  
+_CACHE_DFP: dict[int, dict[str, pd.DataFrame]] = {}
+
+
 def _download_dfp_ano(ano: int) -> dict[str, pd.DataFrame]:
     """
     Baixa e extrai o ZIP anual de DFP da CVM, retornando um dict
-    {nome_do_arquivo_csv: DataFrame}. Cacheia o ZIP em data/.
+    {nome_do_arquivo_csv: DataFrame}. Cacheia o ZIP em data/raw/.
+
+    Reparsear ~20 CSVs a cada chamada (get_dfp/get_composicao_capital
+    chamam isso o tempo todo — ex.: o heatmap de sensibilidade do DCF fazia
+    25 chamadas) era o gargalo real do pipeline. Duas camadas de cache:
+    _CACHE_DFP em memória (dura o processo) e parquet em disco em
+    DFP_PARSED_DIR (sobrevive entre execuções — parsear parquet é bem mais
+    rápido que reparsear CSV, e preserva os dtypes já inferidos pelo pandas
+    na primeira leitura, sem os riscos de round-trip do CSV).
     """
+    if ano in _CACHE_DFP:
+        return _CACHE_DFP[ano]
+
+    pasta_parquet = DFP_PARSED_DIR / str(ano)
+    if pasta_parquet.exists():
+        dados = {
+            f"{arquivo.stem}.csv": pd.read_parquet(arquivo)
+            for arquivo in pasta_parquet.glob("*.parquet")
+        }
+        if dados:
+            _CACHE_DFP[ano] = dados
+            return dados
+
     zip_path = DATA_DIR / f"dfp_cia_aberta_{ano}.zip"
     if not zip_path.exists():
         url = f"{CVM_BASE_URL}/dfp_cia_aberta_{ano}.zip"
         resp = requests.get(url, timeout=60)
         resp.raise_for_status()
         zip_path.write_bytes(resp.content)
- 
+
     dados = {}
     with zipfile.ZipFile(zip_path) as z:
         for nome_arquivo in z.namelist():
@@ -206,6 +235,12 @@ def _download_dfp_ano(ano: int) -> dict[str, pd.DataFrame]:
                     dados[nome_arquivo] = pd.read_csv(
                         io.TextIOWrapper(f, encoding="latin1"), sep=";"
                     )
+
+    pasta_parquet.mkdir(parents=True, exist_ok=True)
+    for nome_arquivo, df in dados.items():
+        df.to_parquet(pasta_parquet / f"{Path(nome_arquivo).stem}.parquet")
+
+    _CACHE_DFP[ano] = dados
     return dados
  
  

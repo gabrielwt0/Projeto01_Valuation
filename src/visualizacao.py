@@ -2,10 +2,13 @@
 visualizacao.py
 
 Fase 5: gráficos do relatório de valuation. Funções puras — recebem dado
-já calculado (por wacc.py/dcf.py/var.py) e um caminho de saída, não
-buscam nem calculam nada aqui. Backend 'Agg' forçado no import porque
-este projeto roda sem display (servidor/CI) — sem isso, matplotlib tenta
-abrir uma janela e falha num ambiente headless.
+já calculado (por wacc.py/dcf.py/var.py) e devolvem a Figure; se um
+caminho for passado, também salvam e fecham a figura (uso do
+scripts/gerar_relatorio.py, que precisa dos PNGs em disco pro markdown).
+Sem caminho, quem chamou (ex.: app.py/Streamlit) fica dono da figure e
+decide quando fechá-la. Backend 'Agg' forçado no import porque este
+projeto roda sem display (servidor/CI) — sem isso, matplotlib tenta abrir
+uma janela e falha num ambiente headless.
 """
 
 import matplotlib
@@ -27,7 +30,15 @@ CORES = {
 }
 
 
-def grafico_receita_historica(anos: list[int], receitas: list[float], caminho: str) -> None:
+def _salvar_se_pedido(fig: plt.Figure, caminho: str | None) -> plt.Figure:
+    fig.tight_layout()
+    if caminho is not None:
+        fig.savefig(caminho, dpi=120)
+        plt.close(fig)
+    return fig
+
+
+def grafico_receita_historica(anos: list[int], receitas: list[float], caminho: str | None = None) -> plt.Figure:
     """
     Barras de receita líquida por ano (R$ mil, escala nativa do DFP).
     Serve para visualizar de cara o boom/queda que torna o CAGR sensível à
@@ -38,9 +49,7 @@ def grafico_receita_historica(anos: list[int], receitas: list[float], caminho: s
     ax.set_ylabel("Receita líquida (R$ mil)")
     ax.set_title("Receita líquida histórica")
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:,.0f}".replace(",", "."))
-    fig.tight_layout()
-    fig.savefig(caminho, dpi=120)
-    plt.close(fig)
+    return _salvar_se_pedido(fig, caminho)
 
 
 def grafico_projecao_fcff(
@@ -48,8 +57,8 @@ def grafico_projecao_fcff(
     fcff_historico: list[float],
     anos_projetado: list[int],
     fcff_projetado: list[float],
-    caminho: str,
-) -> None:
+    caminho: str | None = None,
+) -> plt.Figure:
     """
     Linha do FCFF histórico + projeção explícita, com marcador vertical
     separando os dois trechos — deixa claro que a parte projetada é
@@ -69,9 +78,7 @@ def grafico_projecao_fcff(
     ax.set_ylabel("FCFF (R$ mil)")
     ax.set_title("FCFF: histórico e projeção")
     ax.legend()
-    fig.tight_layout()
-    fig.savefig(caminho, dpi=120)
-    plt.close(fig)
+    return _salvar_se_pedido(fig, caminho)
 
 
 def grafico_estrutura_capital_wacc(
@@ -80,8 +87,8 @@ def grafico_estrutura_capital_wacc(
     ke: float,
     kd_liquido: float,
     wacc: float,
-    caminho: str,
-) -> None:
+    caminho: str | None = None,
+) -> plt.Figure:
     """
     Barra horizontal única, empilhada, mostrando os pesos de equity/dívida
     na estrutura de capital, com Ke/Kd/WACC anotados ao lado.
@@ -97,9 +104,7 @@ def grafico_estrutura_capital_wacc(
     ax.set_yticks([])
     ax.set_title(f"Estrutura de capital e WACC ({wacc:.1%})")
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=2)
-    fig.tight_layout()
-    fig.savefig(caminho, dpi=120)
-    plt.close(fig)
+    return _salvar_se_pedido(fig, caminho)
 
 
 def grafico_sensibilidade_dcf(
@@ -107,11 +112,11 @@ def grafico_sensibilidade_dcf(
     wacc_central: float,
     g_perpetuidade_central: float,
     calcular_preco_justo,
-    caminho: str,
+    caminho: str | None = None,
     n_pontos: int = 5,
     delta_wacc: float = 0.02,
     delta_g: float = 0.01,
-) -> None:
+) -> plt.Figure:
     """
     Heatmap clássico de sensibilidade do DCF: preço justo por ação variando
     WACC (linhas) x g_perpetuidade (colunas), ao redor dos valores centrais
@@ -140,9 +145,7 @@ def grafico_sensibilidade_dcf(
             ax.text(j, i, f"{precos[i, j]:.2f}", ha="center", va="center", fontsize=8)
 
     fig.colorbar(im, ax=ax, label="R$/ação")
-    fig.tight_layout()
-    fig.savefig(caminho, dpi=120)
-    plt.close(fig)
+    return _salvar_se_pedido(fig, caminho)
 
 
 def grafico_var_distribuicao(
@@ -151,8 +154,8 @@ def grafico_var_distribuicao(
     var_historico: float,
     var_monte_carlo: float,
     confianca: float,
-    caminho: str,
-) -> None:
+    caminho: str | None = None,
+) -> plt.Figure:
     """
     Histograma dos retornos diários com os três VaR (paramétrico,
     histórico, Monte Carlo) marcados como linhas verticais na cauda
@@ -172,6 +175,4 @@ def grafico_var_distribuicao(
     ax.set_ylabel("Frequência")
     ax.set_title("Distribuição de retornos e VaR")
     ax.legend()
-    fig.tight_layout()
-    fig.savefig(caminho, dpi=120)
-    plt.close(fig)
+    return _salvar_se_pedido(fig, caminho)
